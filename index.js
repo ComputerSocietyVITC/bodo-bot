@@ -1,25 +1,51 @@
-require('dotenv').config()
+const dotenv = require('dotenv'); dotenv.config();
 const { REST } = require('@discordjs/rest');
 const { Routes } = require('discord-api-types/v9');
+const { wordlePlay } = require('./wordle/index.js');
+const { SlashCommandBuilder } = require('@discordjs/builders');
 
-const commands = [{
-  name: 'ping',
-  description: 'Replies with Pong!'
-}]; 
+const fs = require('fs');
+const { Client, Collection, Intents } = require('discord.js');
 
-const rest = new REST({ version: '9' }).setToken('token');
+const vars = process.env;
+const token  = vars.TOKEN;
 
-(async () => {
-  try {
-    console.log('Started refreshing application (/) commands.');
+const client = new Client({ intents: [Intents.FLAGS.GUILDS] });
+const rest = new REST({ version: '9' }).setToken(vars.TOKEN);
 
-    await rest.put(
-      Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
-      { body: commands },
-    );
+/* 
+---------------------------------- REGISTER COMMANDS ---------------------------------
+*/
 
-    console.log('Successfully reloaded application (/) commands.');
-  } catch (error) {
-    console.error(error);
-  }
-})();
+client.commands = new Collection();
+const commandFiles = fs.readdirSync('./commands').filter(file => file.endsWith('.js'));
+
+for (const file of commandFiles) {
+  const command = require(`./commands/${file}`);
+
+  client.commands.set(command.data.name, command);
+}
+
+client.once('ready', () => {
+  console.log('Ready!');
+})
+
+client.on('interactionCreate', async interaction => {
+    if(!interaction.isCommand()) return;
+
+    const command = client.commands.get(interaction.commandName);
+
+    if(!command) return;
+
+    try {
+        await command.execute(interaction);
+    } catch (error) {
+        console.log(error);
+        await interaction.reply({ 
+            content: 'There was an error executing this command!',
+            ephemeral: true 
+        });
+    }
+})
+
+client.login(token);
